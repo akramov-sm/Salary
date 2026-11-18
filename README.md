@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Salary — трекер личных финансов
 
-## Getting Started
+Next.js 15 (App Router) · TypeScript · Tailwind v4 · shadcn/ui · Turso (LibSQL) + Drizzle ORM · Auth.js v5.
 
-First, run the development server:
+## Запуск локально
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```powershell
+npm install
+copy .env.example .env.local   # затем впишите значения (см. ниже)
+npm run db:push                # создать таблицы в Turso
+npm run db:seed                # системные категории
+npm run dev                    # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Переменные окружения
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Переменная | Что это |
+| --- | --- |
+| `TURSO_DATABASE_URL` | URL базы, `libsql://имя-логин.turso.io` |
+| `TURSO_AUTH_TOKEN` | токен доступа к базе |
+| `AUTH_SECRET` | секрет подписи сессий, любая случайная строка от 32 байт |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Сгенерировать секрет: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`.
+Файл `.env.local` в git не попадает.
 
-## Learn More
+## Команды
 
-To learn more about Next.js, take a look at the following resources:
+| Команда | Назначение |
+| --- | --- |
+| `npm run dev` | разработка (Turbopack) |
+| `npm run build` / `npm start` | продакшн-сборка и запуск |
+| `npm run lint` | ESLint |
+| `npm run db:push` | применить схему `src/db/schema.ts` к Turso |
+| `npm run db:seed` | добавить системные категории (идемпотентно) |
+| `npm run db:studio` | просмотр данных в браузере |
+| `npm run db:check-isolation` | тест изоляции данных между пользователями (создаёт и удаляет временных пользователей) |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Деплой на Vercel
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Загрузите проект в GitHub-репозиторий (корень репозитория — эта папка `salary`).
+2. На vercel.com: **Add New → Project**, выберите репозиторий. Framework определится как Next.js.
+3. В **Settings → Environment Variables** добавьте для Production (и Preview):
+   - `TURSO_DATABASE_URL`
+   - `TURSO_AUTH_TOKEN`
+   - `AUTH_SECRET` — **новая** случайная строка, не копируйте из локального файла.
+4. Нажмите **Deploy**. Сборка идёт командой `npm run build` (без Turbopack — он не дружит с libsql).
+5. Схема уже применена к вашей базе через `db:push`. Если для боевого сайта заведена отдельная база Turso,
+   выполните для неё `db:push` и `db:seed`, подставив её переменные в `.env.local`.
 
-## Deploy on Vercel
+Секреты Turso доступны только серверному коду и не попадают в браузер.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Устройство
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `src/db/queries.ts` — единственный слой доступа к данным; каждая функция принимает `userId` и фильтрует по нему.
+- `src/actions/*` — Server Actions: берут `userId` из сессии, валидируют ввод через Zod, вызывают `queries`.
+- Часовой пояс пользователя клиент кладёт в cookie `tz`; «сегодня» и «месяц» сервер считает в нём.
+- Демо-данных в интерфейсе больше нет: всё читается из Turso.
